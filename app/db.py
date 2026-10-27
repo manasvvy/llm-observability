@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 
-from sqlalchemy import JSON, DateTime, Float, Integer, String, Text, create_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
 class Base(DeclarativeBase):
@@ -25,7 +24,7 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, futu
 
 
 def init_db() -> None:
-    from app.models.observations import LLMObservation
+    from app.models.observations import LLMObservation  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 

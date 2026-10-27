@@ -1,5 +1,9 @@
 from __future__ import annotations
 
-__all__ = ["__version__"]
+from dotenv import load_dotenv
 
-__version__ = "0.2.0"
+from app.main import app
+
+load_dotenv()
+
+__all__ = ["app"]

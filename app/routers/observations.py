@@ -6,7 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.observations import LLMObservation
-from app.schemas import LLMObservationCreate, LLMObservationRead, ObservationSummary
+from app.schemas import (
+    LLMCallRequest,
+    LLMObservationCreate,
+    LLMObservationRead,
+    ObservationSummary,
+    ProviderStatus,
+)
+from app.services.pipeline import ingest_llm_call
+from app.services.providers import get_supported_providers
 
 router = APIRouter(prefix="/api/v1", tags=["observations"])
 
@@ -18,6 +26,23 @@ def create_observation(payload: LLMObservationCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(observation)
     return observation
+
+
+@router.post("/observations/ingest", response_model=LLMObservationRead, status_code=status.HTTP_201_CREATED)
+def ingest_observation(payload: LLMCallRequest, db: Session = Depends(get_db)) -> LLMObservation:
+    return ingest_llm_call(
+        db=db,
+        provider=payload.provider,
+        model=payload.model,
+        prompt=payload.prompt,
+        system_prompt=payload.system_prompt,
+        temperature=payload.temperature,
+        max_tokens=payload.max_tokens,
+        metadata=payload.metadata,
+        request_id=payload.request_id,
+        session_id=payload.session_id,
+        user_id=payload.user_id,
+    )
 
 
 @router.get("/observations", response_model=list[LLMObservationRead])
@@ -58,16 +83,25 @@ def get_observation(observation_id: int, db: Session = Depends(get_db)) -> LLMOb
 @router.get("/observations/summary", response_model=ObservationSummary)
 def observation_summary(db: Session = Depends(get_db)) -> ObservationSummary:
     total = db.query(func.count(LLMObservation.id)).scalar() or 0
-    success_count = db.query(func.count(LLMObservation.id)).filter(LLMObservation.status == "success").scalar() or 0
+    success_count = (
+        db.query(func.count(LLMObservation.id))
+        .filter(LLMObservation.status == "success")
+        .scalar()
+        or 0
+    )
     avg_latency = db.query(func.avg(LLMObservation.latency_ms)).scalar() or 0
 
     provider_breakdown = {
         row.provider: row.count
-        for row in db.query(LLMObservation.provider, func.count(LLMObservation.id).label("count")).group_by(LLMObservation.provider).all()
+        for row in db.query(LLMObservation.provider, func.count(LLMObservation.id).label("count"))
+        .group_by(LLMObservation.provider)
+        .all()
     }
     status_breakdown = {
         row.status: row.count
-        for row in db.query(LLMObservation.status, func.count(LLMObservation.id).label("count")).group_by(LLMObservation.status).all()
+        for row in db.query(LLMObservation.status, func.count(LLMObservation.id).label("count"))
+        .group_by(LLMObservation.status)
+        .all()
     }
 
     return ObservationSummary(
@@ -77,3 +111,8 @@ def observation_summary(db: Session = Depends(get_db)) -> ObservationSummary:
         provider_breakdown=provider_breakdown,
         status_breakdown=status_breakdown,
     )
+
+
+@router.get("/providers", response_model=list[ProviderStatus])
+def list_providers() -> list[ProviderStatus]:
+    return get_supported_providers()
