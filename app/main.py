@@ -7,17 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from app.db import init_db
+from app.middleware.logging import logging_middleware
 from app.routers import router as root_router
 from app.routers.observations import router as observations_router
-from app.middleware.logging import logging_middleware
 
 load_dotenv()
 
-
 app = FastAPI(
     title="LLM Observability Layer",
-    version="0.1.0",
-    description="A lightweight observability layer for tracking LLM calls and responses.",
+    version="0.2.0",
+    description="A production-friendly observability service for tracking LLM prompts, responses, latency, tokens, and operational health.",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 app.add_middleware(
