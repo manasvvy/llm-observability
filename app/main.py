@@ -1,19 +1,28 @@
+
 from __future__ import annotations
 
+import os
 from typing import Any
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import init_db
 from app.middleware.logging import logging_middleware
 from app.routers import router as root_router
+from app.routers import llm
 from app.routers.observations import router as observations_router
+
+load_dotenv(override=True)
 
 app = FastAPI(
     title="LLM Observability Pipeline",
     version="0.3.0",
-    description="A real multi-model observability platform for capturing LLM calls across providers and analyzing outcomes.",
+    description=(
+        "A real multi-model observability platform for "
+        "capturing LLM calls across providers and analyzing outcomes."
+    ),
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -25,10 +34,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.middleware("http")(logging_middleware)
 
 app.include_router(root_router)
 app.include_router(observations_router)
+app.include_router(llm.router, prefix="/llm")
 
 
 @app.get("/health")
