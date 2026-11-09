@@ -1,21 +1,23 @@
 from __future__ import annotations
 
-import os
 import time
 import uuid
 from typing import Any
-
-import httpx
 
 from app.services.providers import get_provider_client
 
 
 def normalize_usage(raw_usage: dict[str, Any] | None) -> dict[str, int | None]:
     usage = raw_usage or {}
+    prompt_tokens = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0) or None
+    completion_tokens = int(usage.get("completion_tokens") or usage.get("output_tokens") or 0) or None
+    total_tokens = int(usage.get("total_tokens") or 0) or None
+    if total_tokens is None and (prompt_tokens is not None or completion_tokens is not None):
+        total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
     return {
-        "prompt_tokens": int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0) or None,
-        "completion_tokens": int(usage.get("completion_tokens") or usage.get("output_tokens") or 0) or None,
-        "total_tokens": int(usage.get("total_tokens") or 0) or None,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
     }
 
 
@@ -35,9 +37,10 @@ def ingest_llm_call(
 ):
     from app.models.observations import LLMObservation
 
+    generated_request_id = request_id or str(uuid.uuid4())
+    started_at = time.perf_counter()
     try:
         provider_client = get_provider_client(provider)
-        started_at = time.perf_counter()
         response = provider_client.invoke(
             model=model,
             prompt=prompt,
@@ -46,50 +49,43 @@ def ingest_llm_call(
             max_tokens=max_tokens,
             metadata=metadata,
         )
-        elapsed_ms = round((time.perf_counter() - started_at) * 1000)
-
-        normalized_usage = normalize_usage(response.get("usage"))
+        usage = normalize_usage(response.get("usage"))
         observation = LLMObservation(
-            request_id=request_id or str(uuid.uuid4()),
-            trace_id=response.get("trace_id") or request_id or str(uuid.uuid4()),
+            request_id=generated_request_id,
+            trace_id=response.get("trace_id") or generated_request_id,
             session_id=session_id,
             user_id=user_id,
-            provider=provider,
+            provider=provider.strip().lower(),
             model=model,
             system_prompt=system_prompt,
             prompt=prompt,
             response=response.get("content") or "",
-            prompt_tokens=normalized_usage["prompt_tokens"],
-            completion_tokens=normalized_usage["completion_tokens"],
-            total_tokens=normalized_usage["total_tokens"],
-            latency_ms=response.get("latency_ms") or elapsed_ms,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+            latency_ms=response.get("latency_ms") or round((time.perf_counter() - started_at) * 1000),
             status="success",
             finish_reason=response.get("finish_reason"),
             temperature=temperature,
             cost_usd=response.get("cost_usd"),
-            metadata={
-                **(metadata or {}),
-                "provider_response": response.get("provider_response", {}),
-                "provider": provider,
-                "raw_model": model,
-            },
+            metadata_json={**(metadata or {}), "provider": provider, "raw_model": model},
         )
     except Exception as exc:
         observation = LLMObservation(
-            request_id=request_id or str(uuid.uuid4()),
-            trace_id=request_id or str(uuid.uuid4()),
+            request_id=generated_request_id,
+            trace_id=generated_request_id,
             session_id=session_id,
             user_id=user_id,
-            provider=provider,
+            provider=provider.strip().lower(),
             model=model,
             system_prompt=system_prompt,
             prompt=prompt,
             response="",
-            latency_ms=0,
+            latency_ms=round((time.perf_counter() - started_at) * 1000),
             status="error",
             error_message=str(exc),
             temperature=temperature,
-            metadata={
+            metadata_json={
                 **(metadata or {}),
                 "provider": provider,
                 "raw_model": model,

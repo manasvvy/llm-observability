@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class LLMObservationCreate(BaseModel):
@@ -25,7 +25,10 @@ class LLMObservationCreate(BaseModel):
     error_message: str | None = None
     temperature: float | None = None
     cost_usd: float | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("metadata", "metadata_json"),
+    )
 
 
 class LLMCallRequest(BaseModel):
