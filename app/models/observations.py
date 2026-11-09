@@ -39,4 +39,8 @@ class LLMObservation(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
-    metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+    # SQLAlchemy Declarative reserves the class-level name `metadata`.
+    # Keep the database column and API field named metadata, but map it to a
+    # non-reserved Python attribute.
+    metadata_json: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict, nullable=False)
