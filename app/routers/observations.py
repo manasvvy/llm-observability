@@ -21,8 +21,7 @@ router = APIRouter(prefix="/api/v1", tags=["observations"])
 
 @router.post("/observations", response_model=LLMObservationRead, status_code=status.HTTP_201_CREATED)
 def create_observation(payload: LLMObservationCreate, db: Session = Depends(get_db)) -> LLMObservation:
-    values = payload.model_dump(exclude={"metadata"})
-    observation = LLMObservation(**values, metadata_json=payload.metadata)
+    observation = LLMObservation(**payload.model_dump())
     db.add(observation)
     db.commit()
     db.refresh(observation)
@@ -58,16 +57,27 @@ def list_observations(
     db: Session = Depends(get_db),
 ) -> list[LLMObservation]:
     query = db.query(LLMObservation)
-    for value, column in (
-        (provider, LLMObservation.provider),
-        (model, LLMObservation.model),
-        (status, LLMObservation.status),
-        (user_id, LLMObservation.user_id),
-        (session_id, LLMObservation.session_id),
-    ):
-        if value is not None:
-            query = query.filter(column == value)
-    return query.order_by(LLMObservation.created_at.desc(), LLMObservation.id.desc()).offset(offset).limit(limit).all()
+
+    if provider:
+        query = query.filter(LLMObservation.provider == provider)
+    if model:
+        query = query.filter(LLMObservation.model == model)
+    if status:
+        query = query.filter(LLMObservation.status == status)
+    if user_id:
+        query = query.filter(LLMObservation.user_id == user_id)
+    if session_id:
+        query = query.filter(LLMObservation.session_id == session_id)
+
+    return query.order_by(LLMObservation.created_at.desc()).offset(offset).limit(limit).all()
+
+
+@router.get("/observations/{observation_id}", response_model=LLMObservationRead)
+def get_observation(observation_id: int, db: Session = Depends(get_db)) -> LLMObservation:
+    observation = db.query(LLMObservation).filter(LLMObservation.id == observation_id).first()
+    if observation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found")
+    return observation
 
 
 @router.get("/observations/summary", response_model=ObservationSummary)
@@ -80,6 +90,7 @@ def observation_summary(db: Session = Depends(get_db)) -> ObservationSummary:
         or 0
     )
     avg_latency = db.query(func.avg(LLMObservation.latency_ms)).scalar() or 0
+
     provider_breakdown = {
         row.provider: row.count
         for row in db.query(LLMObservation.provider, func.count(LLMObservation.id).label("count"))
@@ -92,6 +103,7 @@ def observation_summary(db: Session = Depends(get_db)) -> ObservationSummary:
         .group_by(LLMObservation.status)
         .all()
     }
+
     return ObservationSummary(
         total_observations=total,
         success_rate=(success_count / total * 100) if total else 0.0,
@@ -99,14 +111,6 @@ def observation_summary(db: Session = Depends(get_db)) -> ObservationSummary:
         provider_breakdown=provider_breakdown,
         status_breakdown=status_breakdown,
     )
-
-
-@router.get("/observations/{observation_id}", response_model=LLMObservationRead)
-def get_observation(observation_id: int, db: Session = Depends(get_db)) -> LLMObservation:
-    observation = db.query(LLMObservation).filter(LLMObservation.id == observation_id).first()
-    if observation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found")
-    return observation
 
 
 @router.get("/providers", response_model=list[ProviderStatus])

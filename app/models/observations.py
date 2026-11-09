@@ -39,7 +39,4 @@ class LLMObservation(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
-
-    # `metadata` is reserved by SQLAlchemy's Declarative API; keep the DB column
-    # and public API field name while using a safe mapped Python attribute.
-    metadata_json: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
