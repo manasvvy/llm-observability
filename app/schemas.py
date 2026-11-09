@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, AliasPath, BaseModel, ConfigDict, Field
 
 
 class LLMObservationCreate(BaseModel):
@@ -25,9 +25,11 @@ class LLMObservationCreate(BaseModel):
     error_message: str | None = None
     temperature: float | None = None
     cost_usd: float | None = None
+    # For ORM serialization, read the mapped attribute rather than SQLAlchemy's
+    # reserved DeclarativeBase.metadata. The plain alias still accepts API input.
     metadata: dict[str, Any] = Field(
         default_factory=dict,
-        validation_alias=AliasChoices("metadata", "metadata_json"),
+        validation_alias=AliasChoices(AliasPath("metadata_json"), "metadata"),
     )
 
 
